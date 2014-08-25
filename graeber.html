@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Gr&auml;ber Game - Ludum Dare</title>
+<style type="text/css">
+
+ div
+ {
+ 	border-style:solid;
+  border-width: thin;
+  text-align:center;
+  margin:3px;
+  padding: 2px;
+  /* font-size:24px; */
+}
+
+</style>
+</head>
+<body>
+<h1>Gr&auml;ber Game</h1>
+<p>Survive! You've been put inside a mining prison and have to work the tunnels to exchange the raremetal for food. Notes: Use the lift! Careful, food rots relative to the amount. only after completing a tunnel, you only get the raremetal from a tunnel after completing it! You eat more to regain HP, AP. Monsters strength do matter in more ways than you'd expect...</p>
+
+<div id="status"></div>
+
+<div id="LiftInventory">
+LIFT:
+<p/>
+	<!--  <a onclick="placeInLiftClick()">
+		[Put 1 raremetal inside the lift]
+	</a>-->
+	<button onclick="placeInLiftClick()">
+	Put raremetal inside the lift
+</button>
+	<p/>
+	<!-- <a onclick="takeFromLiftClick()">
+		[Take food from the lift]
+	</a>-->
+<button onclick="takeFromLiftClick()">
+	Take food from the lift
+</button>
+</div>
+
+<div id="tunnels">
+<p>Tunnels:</p>
+</div>
+
+
+
+<div id="nextRound">	
+	<button onclick="nextRoundClick()">
+		Rest...
+	</button>
+</div>
+
+<script>
+
+// main game objects
+
+var passedDays =0;
+
+var player = {
+//Status
+healthPoints: 9,
+ actionPoints: 5,
+
+//Own ressources
+food: 5,
+rareMetal: 0,
+}
+
+var lift = {
+//Lift ressources
+food: 0,
+rareMetal: 1,
+}
+
+//html Tunnels
+var tunnelCollection = [createTunnel("Tunnel 1"), createTunnel("Tunnel 2"), createTunnel("Tunnel 3")];
+
+//first time page construction
+redrawStatus();
+
+//--------functions
+
+function createTunnelElement(argTunnel)
+{
+	var generatedTunnelElement = document.createElement("div");
+	generatedTunnelElement.innerHTML = argTunnel.name;
+	var tunnelDataElement = document.createElement("p");
+	tunnelDataElement.innerHTML = "progress: "+ argTunnel.progress + "; ";
+
+	generatedTunnelElement.appendChild(tunnelDataElement);
+
+if (argTunnel.progress < 0) {
+	var emptyTunnelElement = document.createElement("p");
+	emptyTunnelElement.innerHTML = "The tunnel is empty...";
+		
+	generatedTunnelElement.appendChild(emptyTunnelElement);
+}
+
+if (argTunnel.monster != null) {
+	var monsterElement = document.createElement("p");
+	monsterElement.innerHTML = "There is a monster in here!";
+	var fightMonsterData = document.createElement("p");
+	fightMonsterData.innerHTML = "Monster Health: " + argTunnel.monster.healthPoints + "; Monster Strength: " + argTunnel.monster.strength + ";";
+
+	var fightMonsterInput = document.createElement("button");
+	fightMonsterInput.appendChild(document.createTextNode("Fight!"));
+
+	fightMonsterInput.onclick = function(){ fightMonster(argTunnel);};
+
+	if (player.actionPoints <= 0 ) {
+	fightMonsterInput.style.textDecorationLineThrough = true;
+	fightMonsterInput.disabled = true;
+};
+	
+	generatedTunnelElement.appendChild(monsterElement);
+	generatedTunnelElement.appendChild(fightMonsterData);
+	generatedTunnelElement.appendChild(fightMonsterInput);
+}
+else
+{
+	var mineTunnelInput = document.createElement("button");
+	mineTunnelInput.appendChild(document.createTextNode("Mine"));
+	
+	mineTunnelInput.onclick = function(){ mineTunnel(tunnelCollection.indexOf(argTunnel))};	
+
+if (player.actionPoints <= 0 || argTunnel.progress < 0 ) {
+	mineTunnelInput.style.textDecorationLineThrough = true;
+	mineTunnelInput.disabled = true;
+};
+
+	generatedTunnelElement.appendChild(mineTunnelInput);
+
+};
+
+var resetInput = document.createElement("button");
+	resetInput.appendChild(document.createTextNode("Reset!"));
+	
+	resetInput.onclick = function(){ resetTunnel(tunnelCollection.indexOf(argTunnel))};	
+
+if (player.actionPoints <= 3 ) {
+	resetInput.style.textDecorationLineThrough = true;
+	resetInput.disabled = true;
+};
+
+	generatedTunnelElement.appendChild(resetInput);
+
+
+	return generatedTunnelElement;
+}
+
+function redrawStatus()
+{
+//html days
+var dayElement = document.createElement("h2");
+dayElement.innerHTML = "Day: " + passedDays ;
+
+//html status
+var statusElement = document.createElement("p");
+statusElement.innerHTML = " HealthPoints : " +  player.healthPoints + "; ActionPoints : " +  player.actionPoints +";";
+
+//html ressources
+var resourceElement = document.createElement("p");
+resourceElement.innerHTML = " Food : " + player.food + "; Rare Metal. : " +  player.rareMetal + ";";
+
+var tunnel1Element = createTunnelElement(tunnelCollection[0]);
+var tunnel2Element = createTunnelElement(tunnelCollection[1]);
+var tunnel3Element = createTunnelElement(tunnelCollection[2]);
+
+//page construction
+var StatusElem = document.getElementById("status");
+
+while (StatusElem.firstChild) {
+    StatusElem.removeChild(StatusElem.firstChild);
+}
+
+StatusElem.appendChild(document.createTextNode("STATUS:"));
+StatusElem.appendChild(dayElement);
+StatusElem.appendChild(statusElement);
+StatusElem.appendChild(resourceElement);
+
+var TunnelsElem = document.getElementById("tunnels");
+
+while (TunnelsElem.firstChild) {
+    TunnelsElem.removeChild(TunnelsElem.firstChild);
+}
+
+TunnelsElem.appendChild(document.createTextNode("TUNNELS:"));
+TunnelsElem.appendChild(tunnel1Element);
+TunnelsElem.appendChild(tunnel2Element);
+TunnelsElem.appendChild(tunnel3Element);
+
+}
+
+function createTunnel(argName)
+{
+var generatedTunnel = 
+	{
+		name: argName, 
+		rareMetalReservoir: Math.floor((Math.random()*6)+5),
+		monster: null,
+		progress: 0
+	}
+
+	if (Math.random() > 0.7) {
+		// stronger monsters in richer reservoirs
+		generatedTunnel.monster = createMonster(generatedTunnel.rareMetalReservoir); 
+	};
+
+return generatedTunnel;
+}
+
+function mineTunnel(argTunnelIndex)
+{
+	tunnelToMine = tunnelCollection[argTunnelIndex];
+
+	if (player.actionPoints<= 0 || tunnelToMine.progress < 0 )
+	{
+		return;
+	}
+
+	tunnelToMine.progress += 1;
+	player.actionPoints -= 1;
+	if (tunnelToMine.progress >= tunnelToMine.rareMetalReservoir) {
+		player.rareMetal = tunnelToMine.rareMetalReservoir;
+		tunnelToMine.rareMetalReservoir = 0;
+		tunnelToMine.progress = -1;
+		
+	};
+
+	redrawStatus();
+}
+
+function resetTunnel(argTunnelIndex)
+{
+	if (player.actionPoints<= 3)
+	{
+		return;
+	}
+
+	player.actionPoints -= 3;
+
+	tunnelCollection[argTunnelIndex] = createTunnel(tunnelCollection[argTunnelIndex].name);
+	redrawStatus();
+}
+
+function fightMonster(argTunnel)
+{
+	if (player.actionPoints<= 0)
+	{
+		return;
+	}
+
+	argTunnel.monster.healthPoints -= 1;
+	player.actionPoints -= 1;
+
+	if (argTunnel.monster.healthPoints > 0) 
+	{
+		player.healthPoints -= Math.floor(argTunnel.monster.strength);
+	}
+	else
+	{
+		player.rareMetal += argTunnel.monster.strength;
+		argTunnel.monster = null;
+	}
+
+	checkGameOver();	
+	redrawStatus();
+}
+
+function createMonster(rareMetalAmount)
+{
+	var generatedMonster = 
+	{
+		name: "ArchetypeMonster",
+		strength: Math.floor(rareMetalAmount / 3),
+		healthPoints: Math.floor(rareMetalAmount/3),
+	}
+	return generatedMonster;
+}
+
+function nextRoundClick()
+{
+	beginNextRound();
+}
+
+
+function checkGameOver()
+{
+	if (player.healthPoints <= 0) {
+		alert("GAME OVER! You survived for " + passedDays + " days. Thanks for playing! The page will reload.");
+		window.location.reload();
+	};
+}
+
+function placeInLiftClick()
+{
+	//if (player.rareMetal> 0) 
+	//{
+//		player.rareMetal -= 1;
+//		lift.rareMetal += 1;
+	//}
+
+		lift.rareMetal += player.rareMetal;
+		 player.rareMetal = 0;	
+
+
+	redrawStatus();
+}
+
+function takeFromLiftClick()
+{	
+		player.food += lift.food;
+		lift.food = 0;	
+
+		redrawStatus();
+}
+
+function rottingFood(argFood)
+{	
+	return argFood - Math.floor(Math.random() * argFood / 1000 ) ;
+}
+
+function beginNextRound()
+{
+
+if (player.food > 0) 
+	{
+	player.food -=1;
+	 }
+	 else
+	 {
+	 	player.healthPoints -=1;
+	 }
+
+
+//recharging actionPoints with food
+//note: mathematically solvable
+while (player.actionPoints < 5 && player.food > 0)
+{
+	player.food -=1;
+	player.actionPoints += 2;	
+}
+
+//recharging healthPoints with food
+while (player.healthPoints < 9 && player.food > 0)
+{
+	player.food -=1;
+	player.healthPoints += 1;	
+}
+
+while (lift.rareMetal > 0)
+{
+	lift.food += Math.floor((Math.random()*3)+1);
+	lift.rareMetal -= 1;
+}
+
+	player.food = rottingFood(player.food);
+	//lift.food = rottingFood(lift.food);
+
+
+
+// Monster damage
+
+	for (var i=0;i<tunnelCollection.length;i++)
+{ 
+	if (tunnelCollection[i].monster != null) {
+		player.healthPoints -=  Math.ceil( tunnelCollection[i].monster.strength / 2);
+	}
+}
+
+checkGameOver();
+
+	passedDays += 1;
+
+	redrawStatus();
+}
+
+</script>
+</body>
+</html>
